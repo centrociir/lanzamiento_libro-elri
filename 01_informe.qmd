@@ -1,0 +1,29 @@
+---
+title: "(RE)CONFIGURACIONES INTERCULTURALES"
+subtitle: "UN ESTUDIO LONGITUDINAL DE LAS RELACIONES
+ENTRE INDÍGENAS Y NO INDÍGENAS (2016 - 2024)"
+institute: ""
+date: today
+format: 
+  revealjs:
+    theme: simple
+    slide-number: true
+    incremental: false
+    fontsize: 28px
+    margin: 0.3
+    transition: fade
+    controls: true
+    controls-layout: bottom-right
+    css: styles.css
+    template-partials:
+      - title-slide.html
+    cite-method: citeproc
+---
+
+# Introducción
+
+## Resultados
+
+## 
+
+![](img/logo-ciir.svg){fig-align="center"}
