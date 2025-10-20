@@ -1,0 +1,137 @@
+<!-- styles.css -->
+/* Configuración general de fuente para toda la presentación */
+.reveal {
+  font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+/* Estilos para los encabezados */
+.reveal h1, 
+.reveal h2, 
+.reveal h3, 
+.reveal h4, 
+.reveal h5, 
+.reveal h6 {
+  font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #355BC0;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.reveal h1 { font-size: 2.0em; }
+.reveal h2 { font-size: 2.0em; }
+.reveal h3 { font-size: 1.6em; }
+.reveal h4 { font-size: 1.3em; }
+
+/* Estilos para listas */
+.reveal ul,
+.reveal ol {
+  display: block;
+  text-align: left;
+  margin: 0 0 0 1em;
+}
+
+.reveal li {
+  margin: 0.5em 0;
+  font-size: 1.1em;
+}
+
+/* Estilos para texto normal */
+.reveal p {
+  margin: 0.5em 0;
+  line-height: 1.5;
+  font-size: 1.1em;
+}
+
+/* Estilos para texto en negrita */
+.reveal strong {
+  color: #7235C0;
+  font-weight: bold;
+}
+
+/* Estilos para pestañas */
+.panel-tabset .nav-tabs {
+  font-size: 1.2em;
+}
+.panel-tabset .tab-content {
+  font-size: 1.1em;
+}
+
+/* ===================== Portada ===================== */
+/* Contenedor principal de la portada:
+   centrado vertical/horizontal y con poco espacio entre texto y logos */
+.title-container {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;      /* centra verticalmente todo el bloque */
+  align-items: center;          /* centra horizontalmente */
+  padding: 4vh 2vw 6vh;         /* añade algo de aire y evita chocar con flechas */
+  box-sizing: border-box;
+  gap: 1rem;                    /* espacio entre texto y logos (más compacto) */
+}
+
+/* Texto de la portada centrado visualmente.
+   Si prefieres alineación izquierda, cambia a text-align:left */
+.title-content {
+  width: min(100%, 1100px);
+  text-align: center;
+  margin: 0 auto;
+}
+
+/* Fila de logos centrados y con poco espacio entre ellos */
+.title-image {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.9rem;                  /* menor espacio entre logos */
+}
+
+/* Tamaño de logos: más grandes y responsivos */
+.title-image img {
+  height: clamp(60px, 10vh, 110px);  /* sube el tamaño respecto a antes */
+  width: auto;
+  object-fit: contain;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Tipografías de la portada */
+.title {
+  margin-bottom: 12px;          /* menos espacio bajo el título */
+  font-size: 2.2em;
+  color: #44286F;
+}
+
+.subtitle {
+  font-size: 1.4em;
+  margin-bottom: 18px;          /* menos espacio bajo el subtítulo */
+  color: #44286F;
+}
+
+.author {
+  font-size: 1.2em;
+  margin-bottom: 6px;
+}
+
+.institute {
+  font-size: 1em;
+  margin-bottom: 6px;
+}
+
+.advisor {
+  font-size: 1em;
+  font-style: italic;
+}
+
+
+/* Responsivo */
+@media (max-width: 900px) {
+  .title-image img { height: clamp(52px, 8.5vh, 96px); }
+  .title { font-size: 2em; }
+  .subtitle { font-size: 1.25em; }
+}
+
+
