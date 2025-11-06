@@ -829,23 +829,7 @@ plot_variables_por_indigeneidad_line(c("d3_2","d4_2"),
                                      titulo = "Contraste en los apoyos a la violencia", ci = FALSE)
 ```
 
-## Reflexiones metodológicas sobre el estudio ¿Qué aprendimos?
-
--   La importancia de las consistencia en lo ítemes.
-
-    -   No son estudios de opinión publica
-
-    -   Apertura a líneas de investigación
-
--   Sumarse a las nuevas corrientes de las metodologías cuantitativas
-
-    -   Ciencia abierta
-
-    -   Reproducibilidad
-
-    -   ¿Fin del embargar los datos?
-
-# 
+## 
 
 > ::: {style="text-align:center; font-style:italic; color:#6B4E3D; font-size:1.4em;"}
 > ¿Qué nos dicen estos cambios y rupturas en las relaciones interculturales entre indígenas y no indígenas en Chile?
