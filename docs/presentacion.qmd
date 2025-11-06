@@ -1,0 +1,852 @@
+---
+title: "Lanzamiento libro: (Re)configuraciones interculturales"
+subtitle: "Un estudio longitudinal entre indígenas y no indígenas en Chile (2016 - 2024) "
+authors: "Matías Deneken & Eduardo Valenzuela (editores)"
+institute: "Matías Deneken & Eduardo Valenzuela (Editores)"
+date: today
+format: 
+  revealjs:
+    theme: simple
+    slide-number: true
+    incremental: false
+    fontsize: 28px
+    margin: 0.3
+    transition: fade
+    controls: true
+    controls-layout: bottom-right
+    css: styles.css
+    template-partials:
+      - title-slide.html
+    cite-method: citeproc
+---
+
+```{r setup, include=FALSE}
+# ===============================================================================
+# BLOQUE LISTO · SIN DISTINCIÓN PARA "e*" · (SIN INFO DE ESCALAS EN LA GRÁFICA)
+# Subtítulo: “Cruce por pertenencia: Indígena vs No indígena”
+# ===============================================================================
+
+# ===============================================================================
+# BLOQUE LISTO (SIN INFO DE ESCALAS / TOP-BOX EN LA SALIDA)
+# Subtítulo estándar: “Cruce por pertenencia: Indígena vs No indígena”
+# ===============================================================================
+
+# 0) Librerías -------------------------------------------------------------------
+if (!requireNamespace("pacman", quietly = TRUE)) install.packages("pacman")
+pacman::p_load(
+  tidyverse, ggplot2, ggalluvial, viridis, RColorBrewer,
+  patchwork, scales, here, glue, ggridges, haven, forcats, readr
+)
+
+library(dplyr)
+library(rlang)
+
+# --- NO ESCALAS: stubs y caption limpio ----------------------------------------
+get_escala_info    <- function(...) NULL
+get_escala_resumen <- function(...) ""
+.build_caption     <- function(txt_fuente, ...) txt_fuente
+CAPTION_FUENTE     <- "Fuente: Estudio Longitudinal de Relaciones Interculturales (2016–2023)"
+
+# 1) Cargar base -----------------------------------------------------------------
+load("../data/BBDD_ELRI_LONG.RData")
+panel_data <- BBDD_ELRI_LONG
+
+# 1B) Elegir columna ID y ola presentes en tu base -------------------------------
+id_var <- dplyr::case_when(
+  "folio"  %in% names(panel_data) ~ "folio",
+  "ticket" %in% names(panel_data) ~ "ticket",
+  "id"     %in% names(panel_data) ~ "id",
+  TRUE ~ NA_character_
+)
+if (is.na(id_var)) stop("No encuentro columna ID (esperaba 'folio' o 'ticket' o 'id').")
+
+wave_var <- dplyr::case_when(
+  "ola"       %in% names(panel_data) ~ "ola",
+  "wave_num"  %in% names(panel_data) ~ "wave_num",
+  "fecha_ola" %in% names(panel_data) ~ "fecha_ola",
+  TRUE ~ NA_character_
+)
+if (is.na(wave_var)) stop("No encuentro columna de ola (esperaba 'ola' / 'wave_num' / 'fecha_ola').")
+
+id_sym   <- sym(id_var)
+wave_sym <- sym(wave_var)
+
+# 2) IDs que efectivamente aparecen en 4 olas -----------------------------------
+ids_4olas <- panel_data %>%
+  filter(!is.na(!!id_sym), !is.na(!!wave_sym)) %>%
+  distinct(!!id_sym, !!wave_sym) %>%
+  count(!!id_sym, name = "n_olas") %>%
+  filter(n_olas == 4) %>%
+  pull(!!id_sym)
+
+# 3) Subset final ---------------------------------------------------------------
+panel_data <- panel_data %>%
+  filter((!!id_sym) %in% ids_4olas)
+
+# --- 0) Vector de variables A2 --------------------------------------------------
+a2_vars <- c("a2_1","a2_2","a2_3","a2_4","a2_5")
+
+# --- 1) Helper: invertir escala 1–5  (1↔5, 2↔4, 3→3) ---------------------------
+invertir_1a5 <- function(x) {
+  v <- haven::zap_labels(x) |> suppressWarnings(as.numeric())
+  invalid <- v %in% c(66,77,88,99,666,777,888,999,8888,9999)
+  v[invalid] <- NA_real_
+  v[!(v %in% 1:5)] <- NA_real_
+  dplyr::case_when(
+    v == 1 ~ 5,
+    v == 2 ~ 4,
+    v == 3 ~ 3,
+    v == 4 ~ 2,
+    v == 5 ~ 1,
+    TRUE   ~ NA_real_
+  )
+}
+
+# --- 2) Aplicar inversión EN SITIO a a2_* ---------------------------------------
+panel_data <- panel_data %>%
+  dplyr::mutate(across(dplyr::all_of(a2_vars), invertir_1a5))
+
+# 🔒 Tamaño global fijo p/ slides -------------------------------------------------
+knitr::opts_chunk$set(
+  fig.width  = 13.33,  # ~1400 px
+  fig.height = 7.5,    # ~800 px
+  dpi        = 105,
+  dev        = "png",
+  out.width  = "100%",
+  fig.align  = "center",
+  echo = FALSE, warning = FALSE, message = FALSE
+)
+
+# 4) Preparación base -------------------------------------------------------------
+panel_data <- panel_data %>%
+  mutate(
+    ola_chr   = as.character(ola),
+    fecha_ola = dplyr::recode(ola_chr, "1"="2016","2"="2018","3"="2021","4"="2023",
+                              .default = NA_character_),
+    wave_num  = readr::parse_integer(ola_chr, na = c("", "NA")),
+    a1_num    = haven::zap_labels(a1) |> suppressWarnings(as.numeric(.)),
+    cat_indi  = dplyr::case_when(
+      a1_num %in% 1:11 ~ "Indígena",
+      a1_num == 12    ~ "No indígena",
+      TRUE            ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(fecha_ola), !is.na(cat_indi)) %>%
+  mutate(
+    cat_indi  = factor(cat_indi, levels = c("Indígena", "No indígena")),
+    fecha_ola = factor(fecha_ola, levels = c("2016","2018","2021","2023"))
+  )
+
+# 5) Tema gráfico ----------------------------------------------------------------
+theme_esep_longitudinal <- function() {
+  theme_minimal(base_family = "Arial") +
+    theme(
+      plot.title.position = "plot",
+      plot.title    = element_text(size = 22, face = "bold", hjust = 0.5, margin = margin(b = 10)),
+      plot.subtitle = element_text(size = 18, hjust = 0.5, color = "#555555", margin = margin(b = 15)),
+      axis.title    = element_text(size = 15, face = "bold"),
+      axis.text     = element_text(size = 14, color = "#333"),
+      legend.title  = element_text(size = 16, face = "bold"),
+      legend.text   = element_text(size = 16),
+      strip.text    = element_text(size = 15, face = "bold"),
+      panel.grid.major = element_line(color = "#f0f0f0", size = 0.5),
+      panel.grid.minor = element_blank(),
+      legend.position  = "bottom",
+      plot.caption  = element_text(size = 12, color = "#777", margin = margin(t = 10, b = 8)),
+      plot.margin   = margin(t = 10, r = 30, b = 24, l = 10)
+    )
+}
+theme_set(theme_esep_longitudinal())
+
+# 6) Paleta identidad + helpers --------------------------------------------------
+pal_identidad <- c("Indígena" = "#D81B60", "No indígena" = "#1E88E5")
+scale_fill_identidad  <- function(label = "Identidad") scale_fill_manual(values = pal_identidad, name = label, drop = FALSE)
+scale_color_identidad <- function(label = "Identidad") scale_color_manual(values = pal_identidad, name = label, drop = FALSE)
+legend_identidad <- function() {
+  guides(color = guide_legend(override.aes = list(linetype = 1, size = 1.6), title = "Identidad"),
+         fill  = "none")
+}
+
+# 7) Etiquetas (manuales opcionales) ---------------------------------------------
+var_labels <- c(
+  "a4"    = "Identificación con los pueblos originarios",
+  "a6"    = "Identificación con Chile",
+  "a2_1"  = "Para definirse como indígena: Que hable la lengua de su Pueblo Originario",
+  "a2_3"  = "Para definirse como indígena: Que participe en ritos y ceremonias",
+  "a2_4"  = "Para definirse como indígena: Que viva en una comunidad",
+  "a2_5"  = "Para definirse como indígena: Que tenga algún apellido indígena",
+  "c1"    = "Simpatía hacia chilenos no indígenas",
+  "c4"    = "Simpatía hacia chilenos indígenas",
+  "c2"    = "Confianza en chilenos no indígenas",
+  "c5"    = "Confianza en chilenos indígenas",
+  "c17_2" = "Importa entender el punto de vista de los Pueblos Originarios",
+  "c17_4" = "Importa entender el punto de vista de los no indígenas",
+  "c19"   = "Percepción de diferencia entre grupos",
+  "c22"   = "Condiciones de vida indígenas son peores",
+  "c26_1" = "Mi familia valora que yo tenga amigos de Pueblos Originarios",
+  "c26_2" = "Mi familia valora que yo tenga amigos No Indígenas",
+  "c27_1" = "En Chile se respeta a los Pueblos Originarios",
+  "c27_2" = "La imagen de Pueblos Originarios es positiva",
+  "c32_1" = "Firmar cartas de apoyo a causas indígenas",
+  "c32_2" = "Protestar por causas indígenas",
+  "c35"   = "La sangre indígena define nuestras vidas",
+  "d1_1"  = "Conflicto: Estado vs Pueblos Indígenas",
+  "d1_2"  = "Conflicto: indígenas vs no indígenas",
+  "d2_3"  = "El conflicto genera inseguridad en el país",
+  "d5_1"  = "Carabineros respetan a personas indígenas",
+  "d5_2"  = "Carabineros respetan a no indígenas",
+  "d6_1"  = "Me siento identificado con la causa indígena",
+  "d6_2"  = "Me siento comprometido con la causa indígena",
+  "d3_1"  = "Uso de la fuerza de Carabineros para disolver protestas",
+  "d3_2"  = "Agricultores usen armas para enfrentarse",
+  "d4_2"  = "Que grupos de personas indígenas se tomen terrenos",
+  "d4_3"  = "El bloqueo de carreteras por parte de grupos indígenas",
+  "e3_2"  = "Autonomía territorial indígena dentro del Estado",
+  "e3_3"  = "Justicia considera tradiciones y costumbres indígenas",
+  "e4_4"  = "Restituir tierras a los pueblos indígenas",
+  "e4_5"  = "Escaños reservados indígenas en el Congreso"
+)
+
+# --- FUNCIÓN SEGURA PARA LABELS -------------------------------------------------
+label_var <- function(v) {
+  if (exists("var_labels") && v %in% names(var_labels)) {
+    lab <- var_labels[[v]]
+    if (!is.null(lab) && nzchar(lab)) return(as.character(lab))
+  }
+  if (v %in% names(panel_data)) {
+    lab_attr <- attr(panel_data[[v]], "label", exact = TRUE)
+    if (!is.null(lab_attr) && nzchar(lab_attr)) return(as.character(lab_attr))
+  }
+  return(as.character(v))
+}
+
+# 8) Detectar variables "e" (bloque común) ---------------------------------------
+e_all <- names(panel_data)[grepl("^e\\d+_", names(panel_data))]
+
+# 9) Temas (E en un único bloque) ------------------------------------------------
+grupos_tematicos <- list(
+  "Identificación"                 = c("a4", "a6"),
+  "Afecto intergrupal"             = c("c1", "c4"),
+  "Confianza intergrupal"          = c("c2", "c5"),
+  "Diferencia y desigualdad"       = c("c19", "c22"),
+  "Valores/actitudes simbólicas"   = c("c17_2", "c17_4", "c26_1", "c26_2", "c27_1", "c27_2", "c35"),
+  "Participación cívica"           = c("c32_1", "c32_2"),
+  "Percepción de conflicto"        = c("d1_1", "d1_2"),
+  "Confianza institucional"        = c("d2_3", "d5_1", "d5_2"),
+  "Justificación de la violencia"  = c("d3_1","d3_2","d4_2","d4_3"),
+  "Bloque E (todas)"               = e_all
+)
+vars_de_tema  <- function(tema) {
+  if (!tema %in% names(grupos_tematicos))
+    stop("Tema no reconocido. Usa: ", paste(names(grupos_tematicos), collapse = " | "))
+  grupos_tematicos[[tema]]
+}
+listar_temas  <- function() names(grupos_tematicos)
+
+# 10) (INTERNAL) Config de variables especiales ----------------------------------
+violencia_vars <- c("d3_1","d3_2","d4_2","d4_3")
+
+# 11) Limpieza Likert (interna, sin mostrar) -------------------------------------
+likert_clean <- function(x) {
+  x2 <- haven::zap_labels(x) |> suppressWarnings(as.numeric())
+  invalid <- x2 %in% c(66, 77, 88, 99, 666, 777, 888, 999, 8888, 9999)
+  x2[invalid] <- NA_real_
+  x2[!(x2 %in% 1:5)] <- NA_real_
+  x2
+}
+
+# 12) Porcentaje "alto" (interno; sin exponer reglas en la gráfica) --------------
+agg_pct_top <- function(df, var, min_n = 20) {
+  regla_pos <- function(v, valor) if (v %in% violencia_vars) valor %in% 3:5 else valor %in% 4:5
+  df %>%
+    select(any_of("ticket"), wave_num, fecha_ola, cat_indi, !!sym(var)) %>%
+    mutate(
+      valor = likert_clean(.data[[var]]),
+      grupo = cat_indi,
+      pos   = ifelse(regla_pos(var, valor), 1, 0)
+    ) %>%
+    filter(!is.na(pos)) %>%
+    group_by(wave_num, fecha_ola, grupo) %>%
+    summarise(p = mean(pos, na.rm = TRUE), n = n(), .groups = "drop") %>%
+    filter(n >= min_n) %>%
+    mutate(
+      porcentaje = p * 100,
+      se_pct     = sqrt(p * (1 - p) / n) * 100,
+      lo         = pmax(0, porcentaje - 1.96 * se_pct),
+      hi         = pmin(100, porcentaje + 1.96 * se_pct),
+      fecha_ola  = factor(as.character(fecha_ola), levels = c("2016","2018","2021","2023")),
+      grupo      = fct_drop(grupo)
+    )
+}
+
+# 13) Validación segura -----------------------------------------------------------
+validar_vars <- function(vars) {
+  presentes <- intersect(vars, names(panel_data))
+  faltantes <- setdiff(vars, names(panel_data))
+  if (length(faltantes) > 0) warning("Se omitieron variables no encontradas: ", paste(faltantes, collapse = ", "))
+  if (length(presentes) == 0) stop("Ninguna de las variables existe en 'panel_data'.")
+  presentes
+}
+
+# 14) BARRAS: una variable --------------------------------------------------------
+plot_variable_por_indigeneidad <- function(variable, titulo_variable = NULL, min_n = 20) {
+  if (!variable %in% names(panel_data)) { warning("Variable no encontrada: ", variable); return(NULL) }
+  if (is.null(titulo_variable)) titulo_variable <- label_var(variable)
+  tendencias <- agg_pct_top(panel_data, variable, min_n = min_n)
+  if (nrow(tendencias) == 0) { warning("Sin datos suficientes."); return(NULL) }
+
+  ggplot(tendencias, aes(x = fecha_ola, y = porcentaje, fill = grupo)) +
+    geom_bar(position = position_dodge(width = 0.8), stat = "identity",
+             color = "white", width = 0.7, size = 0.8) +
+    geom_text(aes(label = paste0(round(porcentaje), "%")),
+              position = position_dodge(width = 0.8),
+              vjust = -0.6, color = "black", fontface = "bold", size = 5) +
+    scale_y_continuous(labels = \(x) paste0(x, "%"),
+                       limits = c(0,100), breaks = seq(0,100,20),
+                       expand = expansion(mult = c(0, 0.05))) +
+    scale_fill_identidad("Identidad") +
+    labs(
+      title = titulo_variable,
+      subtitle = "Cruce por pertenencia: Indígena vs No indígena",
+      x = "Olas de seguimiento", y = "Porcentaje",
+      caption = CAPTION_FUENTE
+    ) +
+    theme_esep_longitudinal()
+}
+
+# 15) BARRAS: varias variables (facetas) -----------------------------------------
+plot_variables_por_indigeneidad <- function(variables, titulo = NULL, min_n = 20, ncol = 2) {
+  variables <- validar_vars(variables)
+  if (is.null(titulo)) titulo <- paste("Ítems:", paste(variables, collapse = ", "))
+
+  tendencias <- purrr::map_dfr(variables, ~{
+    tmp <- agg_pct_top(panel_data, .x, min_n = min_n)
+    if (nrow(tmp) == 0) return(tmp)
+    tmp$variable <- factor(.x, levels = variables, labels = purrr::map_chr(variables, label_var))
+    tmp
+  })
+  if (nrow(tendencias) == 0) { warning("Sin datos suficientes."); return(NULL) }
+
+  ggplot(tendencias, aes(x = fecha_ola, y = porcentaje, fill = grupo)) +
+    geom_bar(position = position_dodge(width = 0.8), stat = "identity",
+             color = "white", width = 0.7, size = 0.8) +
+    geom_text(aes(label = paste0(round(porcentaje), "%")),
+              position = position_dodge(width = 0.8),
+              vjust = -0.6, color = "black", fontface = "bold", size = 4.2) +
+    scale_y_continuous(labels = \(x) paste0(x, "%"),
+                       limits = c(0,100), breaks = seq(0,100,20),
+                       expand = expansion(mult = c(0, 0.05))) +
+    scale_fill_identidad("Identidad") +
+    labs(
+      title = titulo,
+      subtitle = "Cruce por pertenencia: Indígena vs No indígena",
+      x = "Olas de seguimiento", y = "Porcentaje",
+      caption = CAPTION_FUENTE
+    ) +
+    facet_wrap(~ variable, ncol = ncol) +
+    theme_esep_longitudinal()
+}
+
+# 16) LÍNEAS: una variable --------------------------------------------------------
+plot_variable_por_indigeneidad_line <- function(variable, titulo_variable = NULL,
+                                                min_n = 20, ci = FALSE, annotate_end = TRUE) {
+  if (!variable %in% names(panel_data)) { warning("Variable no encontrada: ", variable); return(NULL) }
+  if (is.null(titulo_variable)) titulo_variable <- label_var(variable)
+
+  tendencias <- agg_pct_top(panel_data, variable, min_n = min_n)
+  if (nrow(tendencias) == 0) { warning("Sin datos suficientes."); return(NULL) }
+  tendencias <- tendencias %>% mutate(x_num = as.numeric(fecha_ola))
+
+  last_lvl_chr <- levels(tendencias$fecha_ola)[length(levels(tendencias$fecha_ola))]
+  labels_mid <- dplyr::filter(tendencias, as.character(fecha_ola) != last_lvl_chr)
+  end_lab <- tendencias %>%
+    dplyr::filter(as.character(fecha_ola) == last_lvl_chr) %>%
+    dplyr::group_by(grupo) %>% dplyr::slice_tail(n = 1) %>% dplyr::ungroup()
+
+  ggplot(tendencias, aes(x = x_num, y = porcentaje, group = grupo, color = grupo)) +
+    (if (ci) geom_ribbon(aes(ymin = lo, ymax = hi, fill = grupo), alpha = 0.15) else NULL) +
+    geom_line(linewidth = 1.8, lineend = "round") +
+    geom_text(data = labels_mid, aes(label = paste0(round(porcentaje), "%")),
+              vjust = -0.9, size = 4.5, show.legend = FALSE) +
+    (if (annotate_end)
+      geom_text(data = end_lab,
+                aes(x = max(tendencias$x_num), y = porcentaje,
+                    label = paste0(round(porcentaje), "%"), color = grupo),
+                inherit.aes = FALSE, hjust = -0.1, vjust = 0.5, size = 5, fontface = "bold") else NULL) +
+    scale_x_continuous(breaks = sort(unique(tendencias$x_num)),
+                       labels = levels(tendencias$fecha_ola)) +
+    scale_y_continuous(labels = \(x) paste0(x, "%"),
+                       limits = c(0,100), breaks = seq(0,100,20),
+                       expand = expansion(mult = c(0.04, 0.12))) +
+    scale_color_identidad("Identidad") + (if (ci) scale_fill_identidad("Identidad") else NULL) +
+    legend_identidad() + coord_cartesian(clip = "off") +
+    labs(
+      title = titulo_variable,
+      subtitle = "Cruce por pertenencia: Indígena vs No indígena",
+      x = "Olas de seguimiento", y = "Porcentaje",
+      caption = CAPTION_FUENTE
+    ) +
+    theme_esep_longitudinal()
+}
+
+# 17) LÍNEAS: varias variables (facetas) -----------------------------------------
+plot_variables_por_indigeneidad_line <- function(variables, titulo = NULL, min_n = 20,
+                                                 ci = FALSE, annotate_end = TRUE, ncol = 2) {
+  variables <- validar_vars(variables)
+  if (is.null(titulo)) titulo <- paste("Ítems:", paste(variables, collapse = ", "))
+
+  tendencias <- purrr::map_dfr(variables, ~{
+    tmp <- agg_pct_top(panel_data, .x, min_n = min_n)
+    if (nrow(tmp) == 0) return(tmp)
+    tmp$variable <- factor(.x, levels = variables,
+                           labels = purrr::map_chr(variables, label_var))
+    tmp
+  })
+  if (nrow(tendencias) == 0) { warning("Sin datos suficientes."); return(NULL) }
+  tendencias <- tendencias %>% mutate(x_num = as.numeric(fecha_ola))
+
+  last_lvl_chr <- levels(tendencias$fecha_ola)[length(levels(tendencias$fecha_ola))]
+  labels_mid <- dplyr::filter(tendencias, as.character(fecha_ola) != last_lvl_chr)
+  end_lab <- tendencias %>%
+    dplyr::filter(as.character(fecha_ola) == last_lvl_chr) %>%
+    dplyr::group_by(variable, grupo) %>% dplyr::slice_tail(n = 1) %>% dplyr::ungroup()
+
+  ggplot(tendencias, aes(x = x_num, y = porcentaje, group = grupo, color = grupo)) +
+    (if (ci) geom_ribbon(aes(ymin = lo, ymax = hi, fill = grupo), alpha = 0.15) else NULL) +
+    geom_line(linewidth = 1.8, lineend = "round") +
+    geom_text(data = labels_mid, aes(label = paste0(round(porcentaje), "%")),
+              vjust = -0.9, size = 4, show.legend = FALSE) +
+    (if (annotate_end)
+      geom_text(data = end_lab,
+                aes(x = max(tendencias$x_num), y = porcentaje,
+                    label = paste0(round(porcentaje), "%"), color = grupo),
+                inherit.aes = FALSE, hjust = -0.1, vjust = 0.5, size = 4.3, fontface = "bold") else NULL) +
+    scale_x_continuous(breaks = sort(unique(tendencias$x_num)),
+                       labels = levels(tendencias$fecha_ola)) +
+    scale_y_continuous(labels = \(x) paste0(x, "%"),
+                       limits = c(0,100), breaks = seq(0,100,20),
+                       expand = expansion(mult = c(0.04, 0.12))) +
+    scale_color_identidad("Identidad") + (if (ci) scale_fill_identidad("Identidad") else NULL) +
+    legend_identidad() + coord_cartesian(clip = "off") +
+    labs(
+      title = titulo,
+      subtitle = "Cruce por pertenencia: Indígena vs No indígena",
+      x = "Olas de seguimiento", y = "Porcentaje",
+      caption = CAPTION_FUENTE
+    ) +
+    facet_wrap(~ variable, ncol = ncol) +
+    theme_esep_longitudinal()
+}
+
+# 18) WRAPPERS por TEMA -----------------------------------------------------------
+plot_tema_barras <- function(tema, titulo = NULL, min_n = 20, ncol = 2) {
+  vars <- vars_de_tema(tema)
+  if (is.null(titulo)) titulo <- glue("{tema}")
+  plot_variables_por_indigeneidad(vars, titulo = titulo, min_n = min_n, ncol = ncol)
+}
+plot_tema_lineas <- function(tema, titulo = NULL, min_n = 20, ci = FALSE, ncol = 2) {
+  vars <- vars_de_tema(tema)
+  if (is.null(titulo)) titulo <- glue("{tema}")
+  plot_variables_por_indigeneidad_line(vars, titulo = titulo, min_n = min_n, ci = ci, ncol = ncol)
+}
+
+# =========================== FIN SCRIPT COMPILADO ===============================
+
+```
+
+## 
+
+> ::: {style="text-align:center; font-style:italic; color:#6B4E3D; font-size:1.4em;"}
+> Cuatro pistas sobre las rupturas y las continuidades en las relaciones interculturales en Chile\
+> <br> [La presentación se organiza en cuatro módulos comparativos que permiten observar, a lo largo del tiempo, las diferencias y convergencias entre personas indígenas y no indígenas.]{style="font-size:0.7em; color:#556B2F; font-style:italic;"}
+> :::
+
+## Preliminares
+
+```{r}
+#| label: ficha-tecnica-elri
+#| out-width: 100%
+#| echo: false
+
+pacman::p_load(tidyverse, gt)
+
+ft <- tribble(
+  ~Aspecto, ~Detalle,
+
+  # Identidad del estudio
+  "Nombre del estudio", "ELRI — Estudio Longitudinal de Relaciones Interculturales.",
+  "Tipo de estudio", "Panel longitudinal de **panel fijo repetido** (contacto aprox. cada 18–24 meses).",
+  "Olas de medición", "Ola 1: **2016** · Ola 2: **2018** · Ola 3: **2021** · Ola 4: **2023**.",
+
+  # Ámbito y unidades
+  "Ámbito geográfico / Universo",
+  "Población **urbana y rural** de 18 años y más en 3 macrozonas del país:
+   Norte (Arica y Parinacota, Tarapacá, Antofagasta),
+   Centro (Región Metropolitana) y
+   Sur (Biobío, La Araucanía, Los Ríos, Los Lagos).",
+  "Unidad de análisis", "Individuos (personas de 18+ residentes en Chile).",
+
+  # Diseño muestral
+  "Diseño muestral",
+  "**Muestra espejo** (indígena / no indígena) seleccionada en las **mismas manzanas o entidades rurales**,
+   con **sobre-representación** de población indígena (rare population sampling).",
+  "Representatividad", "El estudio **no es representativo** de la población nacional. Ajuste con ponderadores",
+
+  # Trabajo de campo / modo / ejecutores
+  "Modo de aplicación por ola",
+  "O1 2016–17: **presencial** · O2 2018–19: **presencial** · O3 2020–21: **telefónica (CATI)** · O4 2022–23: **presencial**.",
+
+  # Tamaños (según ficha)
+  "Tamaño muestral por ola",
+  "O1: **3617** · O2: **2879** · O3: **2881** · O4: **2310**.",
+  "Seguimiento panel",
+  "**1680** participaron en todas las olas",
+
+  # Ética
+  "Ética",
+  "Aprobación del Comité Ético Científico de la Pontificia Universidad Católica de Chile (2016) con renovación en 2023."
+)
+
+fs <- 21
+ft |>
+  gt() |>
+  cols_label(Aspecto = "Aspecto", Detalle = "Detalle") |>
+  fmt_markdown(columns = c(Aspecto, Detalle)) |>
+  cols_width(Aspecto ~ pct(28), Detalle ~ pct(72)) |>
+  tab_style(style = cell_text(weight = "bold"),
+            locations = cells_body(columns = Aspecto)) |>
+  tab_style(style = cell_text(whitespace = "normal"),
+            locations = list(cells_body(columns = Aspecto),
+                             cells_body(columns = Detalle))) |>
+  cols_align("left", everything()) |>
+  opt_row_striping() |>
+  opt_vertical_padding(scale = 1.2) |>
+  tab_options(
+    table.layout = "auto",
+    table.width  = pct(100),
+    data_row.padding = px(10),
+    table.font.size = px(fs),
+    column_labels.font.size = px(fs + 2),
+    heading.title.font.size = px(fs + 6),
+    heading.align = "left"
+  )
+
+```
+
+# 
+
+![](images/alluvial.png){fig-align="center"}
+
+# Identidad: Tendencias y exigencias
+
+# 
+
+```{r}
+p <- plot_variable_por_indigeneidad("a4")
+if (!is.null(p)) {
+  p <- p + labs(caption = paste0(p$labels$caption, "\n\nNo se preguntó en 2016 para muestra No Indígena."))
+}
+p
+```
+
+# 
+
+```{r}
+plot_variable_por_indigeneidad("a6")
+```
+
+# 
+
+```{r}
+plot_variables_por_indigeneidad_line(c("a4","a6"),
+                                     titulo = "Identificación en términos comparados", ci = FALSE)
+```
+
+# 
+
+```{r}
+
+
+# --- Config ---
+variable <- "a2_3"
+
+# --- Olas en la data (ordenadas como en tu setup) ---
+olas_todas <- levels(panel_data$fecha_ola)
+
+# --- Detectar olas con dato (no NA en el crudo) para el caption ---
+olas_con_dato <- panel_data %>%
+  dplyr::transmute(
+    fecha_ola = as.character(fecha_ola),
+    valor = suppressWarnings(as.numeric(haven::zap_labels(.data[[variable]])))
+  ) %>%
+  dplyr::filter(!is.na(valor)) %>%
+  dplyr::distinct(fecha_ola) %>%
+  dplyr::pull(fecha_ola)
+
+olas_no <- setdiff(olas_todas, olas_con_dato)
+caption_extra <- if (length(olas_no) > 0) {
+  paste0(" · No se preguntó en ", paste(olas_no, collapse = ", "), ".")
+} else { "" }
+cap <- paste0("Fuente: Estudio Longitudinal de Relaciones Interculturales  (2016 - 2023)", caption_extra)
+
+# --- Calcular % top-box con tu regla y ELIMINAR olas con 0% ---
+tendencias <- agg_pct_top(panel_data, variable, min_n = 20)
+
+if (nrow(tendencias) == 0) {
+  warning("Sin datos suficientes para ", variable)
+} else {
+  tendencias_plot <- dplyr::filter(tendencias, porcentaje > 0)
+
+  # Si eliminas todas las olas por ser 0%, lo avisamos en el caption
+  if (nrow(tendencias_plot) == 0) {
+    cap <- paste0(cap, " · Todas las olas tuvieron 0% (no se grafica).")
+  }
+
+  # --- Graficar (misma estética que tu función) ---
+  ggplot(tendencias_plot, aes(x = fecha_ola, y = porcentaje, fill = grupo)) +
+    geom_bar(position = position_dodge(width = 0.8),
+             stat = "identity", color = "white", width = 0.7, linewidth = 0.8) +
+    geom_text(aes(label = paste0(round(porcentaje), "%")),
+              position = position_dodge(width = 0.8),
+              vjust = -0.6, color = "black", fontface = "bold", size = 5) +
+    scale_y_continuous(labels = function(x) paste0(x, "%"),
+                       limits = c(0, 100), breaks = seq(0, 100, 20),
+                       expand = expansion(mult = c(0, 0.05))) +
+    scale_fill_identidad("Identidad") +
+    labs(
+      title = label_var(variable),
+      subtitle = {
+        info <- get_escala_info(variable)
+        glue::glue("% Porcentaje de apoyo")
+      },
+      x = "Olas de seguimiento", y = "Porcentaje (0–100)",
+      caption = cap
+    ) +
+    theme_esep_longitudinal()
+}
+
+
+```
+
+# 
+
+```{r}
+# --- Config ---
+variable <- "a2_4"
+
+# --- Olas en la data (ordenadas como en tu setup) ---
+olas_todas <- levels(panel_data$fecha_ola)
+
+# --- Detectar olas con dato (no NA en el crudo) para el caption ---
+olas_con_dato <- panel_data %>%
+  dplyr::transmute(
+    fecha_ola = as.character(fecha_ola),
+    valor = suppressWarnings(as.numeric(haven::zap_labels(.data[[variable]])))
+  ) %>%
+  dplyr::filter(!is.na(valor)) %>%
+  dplyr::distinct(fecha_ola) %>%
+  dplyr::pull(fecha_ola)
+
+olas_no <- setdiff(olas_todas, olas_con_dato)
+caption_extra <- if (length(olas_no) > 0) {
+  paste0(" · No se preguntó en ", paste(olas_no, collapse = ", "), ".")
+} else { "" }
+cap <- paste0("Fuente: Estudio Longitudinal de Relaciones Interculturales  (2016 - 2023)", caption_extra)
+
+# --- Calcular % top-box con tu regla y ELIMINAR olas con 0% ---
+tendencias <- agg_pct_top(panel_data, variable, min_n = 20)
+
+if (nrow(tendencias) == 0) {
+  warning("Sin datos suficientes para ", variable)
+} else {
+  tendencias_plot <- dplyr::filter(tendencias, porcentaje > 0)
+
+  # Si eliminas todas las olas por ser 0%, lo avisamos en el caption
+  if (nrow(tendencias_plot) == 0) {
+    cap <- paste0(cap, " · Todas las olas tuvieron 0% (no se grafica).")
+  }
+
+  # --- Graficar (misma estética que tu función) ---
+  ggplot(tendencias_plot, aes(x = fecha_ola, y = porcentaje, fill = grupo)) +
+    geom_bar(position = position_dodge(width = 0.8),
+             stat = "identity", color = "white", width = 0.7, linewidth = 0.8) +
+    geom_text(aes(label = paste0(round(porcentaje), "%")),
+              position = position_dodge(width = 0.8),
+              vjust = -0.6, color = "black", fontface = "bold", size = 5) +
+    scale_y_continuous(labels = function(x) paste0(x, "%"),
+                       limits = c(0, 100), breaks = seq(0, 100, 20),
+                       expand = expansion(mult = c(0, 0.05))) +
+    scale_fill_identidad("Identidad") +
+    labs(
+      title = label_var(variable),
+      subtitle = {
+        info <- get_escala_info(variable)
+        glue::glue("% Porcentaje de apoyo")
+      },
+      x = "Olas de seguimiento", y = "Porcentaje (0–100)",
+      caption = cap
+    ) +
+    theme_esep_longitudinal()
+}
+
+```
+
+# 
+
+```{r}
+
+
+# --- Config ---
+variable <- "a2_5"
+
+# --- Olas en la data (ordenadas como en tu setup) ---
+olas_todas <- levels(panel_data$fecha_ola)
+
+# --- Detectar olas con dato (no NA en el crudo) para el caption ---
+olas_con_dato <- panel_data %>%
+  dplyr::transmute(
+    fecha_ola = as.character(fecha_ola),
+    valor = suppressWarnings(as.numeric(haven::zap_labels(.data[[variable]])))
+  ) %>%
+  dplyr::filter(!is.na(valor)) %>%
+  dplyr::distinct(fecha_ola) %>%
+  dplyr::pull(fecha_ola)
+
+olas_no <- setdiff(olas_todas, olas_con_dato)
+caption_extra <- if (length(olas_no) > 0) {
+  paste0(" · No se preguntó en ", paste(olas_no, collapse = ", "), ".")
+} else { "" }
+cap <- paste0("Fuente: Estudio Longitudinal de Relaciones Interculturales  (2016 - 2023)", caption_extra)
+
+# --- Calcular % top-box con tu regla y ELIMINAR olas con 0% ---
+tendencias <- agg_pct_top(panel_data, variable, min_n = 20)
+
+if (nrow(tendencias) == 0) {
+  warning("Sin datos suficientes para ", variable)
+} else {
+  tendencias_plot <- dplyr::filter(tendencias, porcentaje > 0)
+
+  # Si eliminas todas las olas por ser 0%, lo avisamos en el caption
+  if (nrow(tendencias_plot) == 0) {
+    cap <- paste0(cap, " · Todas las olas tuvieron 0% (no se grafica).")
+  }
+
+  # --- Graficar (misma estética que tu función) ---
+  ggplot(tendencias_plot, aes(x = fecha_ola, y = porcentaje, fill = grupo)) +
+    geom_bar(position = position_dodge(width = 0.8),
+             stat = "identity", color = "white", width = 0.7, linewidth = 0.8) +
+    geom_text(aes(label = paste0(round(porcentaje), "%")),
+              position = position_dodge(width = 0.8),
+              vjust = -0.6, color = "black", fontface = "bold", size = 5) +
+    scale_y_continuous(labels = function(x) paste0(x, "%"),
+                       limits = c(0, 100), breaks = seq(0, 100, 20),
+                       expand = expansion(mult = c(0, 0.05))) +
+    scale_fill_identidad("Identidad") +
+    labs(
+      title = label_var(variable),
+      subtitle = {
+        info <- get_escala_info(variable)
+        glue::glue("% Porcentaje de apoyo")
+      },
+      x = "Olas de seguimiento", y = "Porcentaje (0–100)",
+      caption = cap
+    ) +
+    theme_esep_longitudinal()
+}
+
+
+```
+
+# Confianza, normas y entendimiento intergrupal
+
+# 
+
+```{r}
+plot_variables_por_indigeneidad_line(c("c2","c5"),
+                                     titulo = "Confianza intergrupal", ci = FALSE)
+```
+
+# 
+
+```{r}
+plot_variables_por_indigeneidad_line(c("c17_2","c17_4"),
+                                     titulo = "Empatía intergrupal", ci = FALSE)
+```
+
+# 
+
+```{r}
+plot_variable_por_indigeneidad("c27_1")
+```
+
+# Apoyo a las demandas indígenas
+
+# 
+
+```{r}
+plot_variable_por_indigeneidad("d6_1")
+```
+
+# 
+
+```{r}
+plot_variable_por_indigeneidad("e4_4")
+```
+
+# 
+
+```{r}
+plot_variable_por_indigeneidad("e4_5")
+```
+
+# Conflicto, trato con policías y justificación de la violencia
+
+# 
+
+```{r}
+plot_variables_por_indigeneidad_line(c("d1_1","d1_2"),
+                                     titulo = "Percepciones de conflicto", ci = FALSE)
+```
+
+# 
+
+```{r}
+plot_variables_por_indigeneidad_line(c("d5_1","d5_2"),
+                                     titulo = "Trato justo desde los carabineros", ci = FALSE)
+```
+
+# 
+
+```{r}
+plot_variables_por_indigeneidad_line(c("d3_1","d4_3"),
+                                     titulo = "Contraste en los apoyos a la violencia", ci = FALSE)
+```
+
+# 
+
+```{r}
+plot_variables_por_indigeneidad_line(c("d3_2","d4_2"),
+                                     titulo = "Contraste en los apoyos a la violencia", ci = FALSE)
+```
+
+## Reflexiones metodológicas sobre el estudio ¿Qué aprendimos?
+
+-   La importancia de las consistencia en lo ítemes.
+
+    -   No son estudios de opinión publica
+
+    -   Apertura a líneas de investigación
+
+-   Sumarse a las nuevas corrientes de las metodologías cuantitativas
+
+    -   Ciencia abierta
+
+    -   Reproducibilidad
+
+    -   ¿Fin del embargar los datos?
+
+# 
+
+> ::: {style="text-align:center; font-style:italic; color:#6B4E3D; font-size:1.4em;"}
+> ¿Qué nos dicen estos cambios y rupturas en las relaciones interculturales entre indígenas y no indígenas en Chile?
+> :::

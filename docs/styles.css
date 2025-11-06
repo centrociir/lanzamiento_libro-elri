@@ -134,4 +134,92 @@
   .subtitle { font-size: 1.25em; }
 }
 
+.olas-grid {
+display: grid;
+grid-template-columns: repeat(4, 1fr);
+gap: 16px;
+align-items: stretch;
+margin-top: 0.5rem;
+}
+.ola-card {
+border: 2px solid #e0e0e0;
+border-radius: 14px;
+padding: 1rem 0.75rem;
+text-align: center;
+box-shadow: 0 2px 10px rgba(0,0,0,.06);
+}
+.ola-title {
+font-size: 1.05rem;
+font-weight: 700;
+letter-spacing: .2px;
+color: #444;
+margin-bottom: .25rem;
+}
+.ola-year {
+font-size: 1.6rem;
+font-weight: 800;
+line-height: 1.2;
+}
+@media (max-width: 900px) {
+.olas-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 520px) {
+.olas-grid { grid-template-columns: 1fr; }
+}
+
+
+:root{
+/* Paleta rústica */
+--indigena:   #B45835;  /* terracota */
+--noindigena: #2E5E8C;  /* azul pizarra */
+--wave1-bg:   #F3E8D3;  /* arena clara */
+--wave1-br:   #E2D7C5;
+--wave2-bg:   #EADDC6;  /* lino */
+--wave2-br:   #D9CBB2;
+--wave3-bg:   #E0D1B4;  /* ocre suave */
+--wave3-br:   #CFBF9C;
+--wave4-bg:   #D5C29A;  /* barro claro */
+--wave4-br:   #C2AD83;
+}
+
+/* Tarjetas de muestra (fila superior) */
+.samples-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin:.25rem 0 .6rem 0}
+.sample-card{
+position:relative;background:#fff;border:2px solid #eee;border-radius:16px;
+padding:1rem 1rem;box-shadow:0 2px 10px rgba(0,0,0,.06)
+}
+.sample-card::before{
+content:"";position:absolute;inset:0 0 auto 0;height:8px;border-radius:16px 16px 0 0;
+background:var(--bar,#ccc)
+}
+.sample-title{font-weight:900;font-size:1.05rem;letter-spacing:.2px;margin:0;color:#333}
+.sample-sub  {font-size:.9rem;color:#666;margin-top:.2rem}
+.sample--indigena{--bar:var(--indigena);border-color:#E8CCBE}
+.sample--noindigena{--bar:var(--noindigena);border-color:#C7D5E4}
+
+/* Grid de olas */
+.olas-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.ola-card{
+border:2px solid #e0e0e0;border-radius:14px;padding:1rem .75rem;text-align:center;
+box-shadow:0 2px 10px rgba(0,0,0,.06)
+}
+.ola-card--1{background:var(--wave1-bg);border-color:var(--wave1-br)}
+.ola-card--2{background:var(--wave2-bg);border-color:var(--wave2-br)}
+.ola-card--3{background:var(--wave3-bg);border-color:var(--wave3-br)}
+.ola-card--4{background:var(--wave4-bg);border-color:var(--wave4-br)}
+.ola-title{font-size:1.02rem;font-weight:700;color:#6B4F3B;margin-bottom:.2rem}
+.ola-year{font-size:1.6rem;font-weight:900;line-height:1.15;color:#2f2f2f}
+
+/* Pie */
+.olas-foot{margin-top:.75rem;color:#555;font-size:.95rem}
+
+/* Responsivo */
+@media (max-width:900px){
+.olas-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:520px){
+.samples-grid{grid-template-columns:1fr}
+.olas-grid{grid-template-columns:1fr}
+}
+
 
